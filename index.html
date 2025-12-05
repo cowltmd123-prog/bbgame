@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네온 벽돌깨기 & 랭킹</title>
+    <style>
+        /* 1. 디자인 및 스타일링 */
+        :root {
+            --primary-color: #00f2ff;
+            --secondary-color: #ff0055;
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #ffffff;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        h1 {
+            margin-top: 20px;
+            text-shadow: 0 0 10px var(--primary-color);
+            font-size: 2.5rem;
+        }
+
+        .container {
+            position: relative;
+            margin-top: 20px;
+        }
+
+        /* 캔버스 스타일 */
+        canvas {
+            background: radial-gradient(circle at center, #2a2a2a, #000);
+            border: 2px solid var(--primary-color);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.3);
+            border-radius: 8px;
+            display: block;
+        }
+
+        /* UI 오버레이 (로그인, 결과 화면) */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-radius: 8px;
+            z-index: 10;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* 입력 폼 및 버튼 */
+        input {
+            padding: 12px;
+            font-size: 1.2rem;
+            border: 2px solid var(--secondary-color);
+            background: transparent;
+            color: white;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            outline: none;
+        }
+
+        button {
+            padding: 10px 30px;
+            font-size: 1.2rem;
+            background: var(--secondary-color);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            box-shadow: 0 0 10px var(--secondary-color);
+        }
+
+        button:hover {
+            background: #d40046;
+            transform: scale(1.05);
+        }
+
+        /* 순위표 스타일 */
+        .leaderboard-section {
+            margin-top: 30px;
+            width: 100%;
+            max-width: 600px;
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .leaderboard-section h2 {
+            text-align: center;
+            color: var(--primary-color);
+            margin-top: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+
+        th {
+            color: var(--secondary-color);
+        }
+
+        tr:nth-child(1) td { color: gold; font-weight: bold; }
+        tr:nth-child(2) td { color: silver; font-weight: bold; }
+        tr:nth-child(3) td { color: #cd7f32; font-weight: bold; }
+
+        .score-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+        
+        .lives-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .message {
+            font-size: 2rem;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+
+    <h1>NEON BRICK BREAKER</h1>
+
+    <div class="container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <!-- 점수 및 생명 표시 -->
+        <div id="inGameUI" class="hidden">
+            <div class="score-display">SCORE: <span id="scoreSpan">0</span></div>
+            <div class="lives-display">LIVES: <span id="livesSpan">3</span></div>
+        </div>
+
+        <!-- 로그인 화면 -->
+        <div id="loginScreen" class="overlay">
+            <h2 style="margin-bottom: 20px;">PLAYER LOGIN</h2>
+            <input type="text" id="usernameInput" placeholder="이름을 입력하세요" maxlength="10">
+            <button id="startBtn">GAME START</button>
+        </div>
+
+        <!-- 게임 종료 화면 -->
+        <div id="gameOverScreen" class="overlay hidden">
+            <div id="endMessage" class="message">GAME OVER</div>
+            <div style="font-size: 1.5rem; margin-bottom: 20px;">최종 점수: <span id="finalScore">0</span></div>
+            <button id="restartBtn">다시 하기</button>
+        </div>
+    </div>
+
+    <!-- 순위표 섹션 -->
+    <div class="leaderboard-section">
+        <h2>🏆 TOP 10 RANKING</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>순위</th>
+                    <th>이름</th>
+                    <th>점수</th>
+                    <th>날짜</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboardBody">
+                <tr><td colspan="4" style="text-align:center;">데이터 불러오는 중...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Firebase 및 게임 로직 -->
+    <script type="module">
+        // -----------------------------------------------------------
+        // 2. FIREBASE 설정 및 연동
+        // -----------------------------------------------------------
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+        import { getDatabase, ref, push, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+
+        // TODO: 본인의 Firebase 설정으로 교체하세요
+        const firebaseConfig = { 
+             apiKey: "AIzaSyAAu1YvvYd3c5NhLOjSpv3oKWzu9C2lNGw",
+  authDomain: "bbgame-7d7ac.firebaseapp.com",
+  databaseURL: "https://bbgame-7d7ac-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "bbgame-7d7ac",
+  storageBucket: "bbgame-7d7ac.firebasestorage.app",
+  messagingSenderId: "784865908630",
+  appId: "1:784865908630:web:7f3b40990e25a412d46fb7",
+  measurementId: "G-7W85NC8R5L"
+        };
+
+        // Firebase 초기화 (설정값이 없으면 에러 방지를 위해 try-catch)
+        let db;
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+            loadLeaderboard();
+        } catch (e) {
+            console.error("Firebase 설정이 올바르지 않습니다. index.html 파일을 열어 firebaseConfig를 수정해주세요.", e);
+            document.getElementById('leaderboardBody').innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">Firebase 설정 필요</td></tr>';
+        }
+
+        // 점수 저장 함수
+        function saveScoreToFirebase(name, score) {
+            if (!db) return;
+            const scoresRef = ref(db, 'scores');
+            const today = new Date().toISOString().split('T')[0];
+            push(scoresRef, {
+                username: name,
+                score: score,
+                date: today,
+                timestamp: Date.now()
+            });
+        }
+
+        // 순위표 로드 함수 (실시간)
+        function loadLeaderboard() {
+            if (!db) return;
+            const scoresRef = ref(db, 'scores');
+            // 점수 기준 정렬, 마지막 10개(가장 높은 점수) 가져오기
+            const topScoresQuery = query(scoresRef, orderByChild('score'), limitToLast(10));
+
+            onValue(topScoresQuery, (snapshot) => {
+                const data = snapshot.val();
+                const leaderboardBody = document.getElementById('leaderboardBody');
+                leaderboardBody.innerHTML = "";
+
+                if (!data) {
+                    leaderboardBody.innerHTML = "<tr><td colspan='4' style='text-align:center'>기록이 없습니다.</td></tr>";
+                    return;
+                }
+
+                // Firebase 데이터는 객체 형태이며 오름차순으로 옴 -> 배열 변환 후 뒤집기
+                const parsedData = Object.keys(data).map(key => data[key]);
+                parsedData.sort((a, b) => b.score - a.score); // 내림차순 정렬
+
+                parsedData.forEach((entry, index) => {
+                    const row = `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${escapeHtml(entry.username)}</td>
+                            <td>${entry.score}</td>
+                            <td>${entry.date}</td>
+                        </tr>
+                    `;
+                    leaderboardBody.innerHTML += row;
+                });
+            });
+        }
+
+        // XSS 방지용
+        function escapeHtml(text) {
+            if (!text) return text;
+            return text.replace(/&/g, "&amp;")
+                       .replace(/</g, "&lt;")
+                       .replace(/>/g, "&gt;")
+                       .replace(/"/g, "&quot;")
+                       .replace(/'/g, "&#039;");
+        }
+
+
+        // -----------------------------------------------------------
+        // 3. 게임 로직 (Canvas API)
+        // -----------------------------------------------------------
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // 게임 변수
+        let ballRadius = 10;
+        let x, y, dx, dy;
+        let paddleHeight = 15;
+        let paddleWidth = 100;
+        let paddleX;
+        let rightPressed = false;
+        let leftPressed = false;
+        let brickRowCount = 5;
+        let brickColumnCount = 9;
+        let brickWidth = 75;
+        let brickHeight = 20;
+        let brickPadding = 10;
+        let brickOffsetTop = 40;
+        let brickOffsetLeft = 22; // 중앙 정렬을 위한 오프셋
+        let bricks = [];
+        let score = 0;
+        let lives = 3;
+        let playerName = "";
+        let animationId;
+        let isGameRunning = false;
+
+        // UI 엘리먼트
+        const loginScreen = document.getElementById("loginScreen");
+        const gameOverScreen = document.getElementById("gameOverScreen");
+        const inGameUI = document.getElementById("inGameUI");
+        const usernameInput = document.getElementById("usernameInput");
+        const startBtn = document.getElementById("startBtn");
+        const restartBtn = document.getElementById("restartBtn");
+        const scoreSpan = document.getElementById("scoreSpan");
+        const livesSpan = document.getElementById("livesSpan");
+        const endMessage = document.getElementById("endMessage");
+        const finalScoreSpan = document.getElementById("finalScore");
+
+        // 초기화
+        function initGame() {
+            x = canvas.width / 2;
+            y = canvas.height - 30;
+            dx = 4; // 공 속도 X
+            dy = -4; // 공 속도 Y
+            paddleX = (canvas.width - paddleWidth) / 2;
+            score = 0;
+            lives = 3;
+            rightPressed = false;
+            leftPressed = false;
+            
+            // 벽돌 생성
+            bricks = [];
+            for(let c=0; c<brickColumnCount; c++) {
+                bricks[c] = [];
+                for(let r=0; r<brickRowCount; r++) {
+                    bricks[c][r] = { x: 0, y: 0, status: 1 };
+                }
+            }
+            updateUI();
+        }
+
+        function updateUI() {
+            scoreSpan.innerText = score;
+            livesSpan.innerText = lives;
+        }
+
+        // 입력 이벤트 리스너
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+
+        function keyDownHandler(e) {
+            if(e.key == "Right" || e.key == "ArrowRight") {
+                rightPressed = true;
+            }
+            else if(e.key == "Left" || e.key == "ArrowLeft") {
+                leftPressed = true;
+            }
+        }
+
+        function keyUpHandler(e) {
+            if(e.key == "Right" || e.key == "ArrowRight") {
+                rightPressed = false;
+            }
+            else if(e.key == "Left" || e.key == "ArrowLeft") {
+                leftPressed = false;
+            }
+        }
+
+        // 그리기 함수들
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI*2);
+            ctx.fillStyle = "#00f2ff";
+            ctx.fill();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#00f2ff";
+            ctx.closePath();
+            ctx.shadowBlur = 0; // 리셋
+        }
+
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height-paddleHeight - 10, paddleWidth, paddleHeight);
+            ctx.fillStyle = "#ff0055";
+            ctx.fill();
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#ff0055";
+            ctx.closePath();
+            ctx.shadowBlur = 0;
+        }
+
+        function drawBricks() {
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    if(bricks[c][r].status == 1) {
+                        let brickX = (c*(brickWidth+brickPadding))+brickOffsetLeft;
+                        let brickY = (r*(brickHeight+brickPadding))+brickOffsetTop;
+                        bricks[c][r].x = brickX;
+                        bricks[c][r].y = brickY;
+                        
+                        ctx.beginPath();
+                        ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                        
+                        // 행마다 다른 색상
+                        const colors = ["#FF5733", "#FFBD33", "#DBFF33", "#75FF33", "#33FF57"];
+                        ctx.fillStyle = colors[r % colors.length];
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        function collisionDetection() {
+            for(let c=0; c<brickColumnCount; c++) {
+                for(let r=0; r<brickRowCount; r++) {
+                    let b = bricks[c][r];
+                    if(b.status == 1) {
+                        if(x > b.x && x < b.x+brickWidth && y > b.y && y < b.y+brickHeight) {
+                            dy = -dy;
+                            b.status = 0;
+                            score += 10;
+                            // 속도 약간 증가 (난이도 조절)
+                            if (score % 50 === 0) {
+                                dx = dx > 0 ? dx + 0.5 : dx - 0.5;
+                                dy = dy > 0 ? dy + 0.5 : dy - 0.5;
+                            }
+                            updateUI();
+                            
+                            // 승리 조건
+                            if(score == brickRowCount*brickColumnCount*10) {
+                                endGame(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            if (!isGameRunning) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBricks();
+            drawBall();
+            drawPaddle();
+            collisionDetection();
+
+            // 벽 충돌 처리
+            if(x + dx > canvas.width-ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            if(y + dy < ballRadius) {
+                dy = -dy;
+            } else if(y + dy > canvas.height-ballRadius-10) { // 바닥 근처
+                if(x > paddleX && x < paddleX + paddleWidth) {
+                    // 패들에 닿음 (각도 조절 효과)
+                    let hitPoint = x - (paddleX + paddleWidth/2);
+                    dx = hitPoint * 0.15; // 중앙에서 멀수록 x속도 증가
+                    dy = -dy;
+                } else {
+                    // 바닥에 닿음 (생명 감소)
+                    lives--;
+                    updateUI();
+                    if(!lives) {
+                        endGame(false);
+                        return;
+                    } else {
+                        // 공 위치 리셋
+                        x = canvas.width/2;
+                        y = canvas.height-30;
+                        dx = 4; 
+                        dy = -4;
+                        paddleX = (canvas.width-paddleWidth)/2;
+                    }
+                }
+            }
+
+            // 패들 이동
+            if(rightPressed && paddleX < canvas.width-paddleWidth) {
+                paddleX += 7;
+            }
+            else if(leftPressed && paddleX > 0) {
+                paddleX -= 7;
+            }
+
+            x += dx;
+            y += dy;
+
+            animationId = requestAnimationFrame(draw);
+        }
+
+        // 게임 시작 버튼
+        startBtn.addEventListener("click", () => {
+            const name = usernameInput.value.trim();
+            if (name.length === 0) {
+                alert("이름을 입력해주세요!");
+                return;
+            }
+            playerName = name;
+            loginScreen.classList.add("hidden");
+            inGameUI.classList.remove("hidden");
+            isGameRunning = true;
+            initGame();
+            draw();
+        });
+
+        // 게임 재시작 버튼
+        restartBtn.addEventListener("click", () => {
+            gameOverScreen.classList.add("hidden");
+            inGameUI.classList.remove("hidden");
+            isGameRunning = true;
+            initGame();
+            draw();
+        });
+
+        // 게임 종료 처리
+        function endGame(isWin) {
+            isGameRunning = false;
+            cancelAnimationFrame(animationId);
+            
+            // 점수 저장
+            saveScoreToFirebase(playerName, score);
+
+            // UI 변경
+            inGameUI.classList.add("hidden");
+            gameOverScreen.classList.remove("hidden");
+            finalScoreSpan.innerText = score;
+            
+            if (isWin) {
+                endMessage.innerText = "🎉 YOU WIN! 🎉";
+                endMessage.style.color = "#00ff00";
+            } else {
+                endMessage.innerText = "GAME OVER";
+                endMessage.style.color = "#ff0055";
+            }
+        }
+    </script>
+</body>
+</html>
